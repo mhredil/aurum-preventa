@@ -6,7 +6,7 @@ import { SyncBar } from "@/components/SyncBar";
 import { formatMoney } from "@/domain/money";
 import { customersForDay, WEEKDAYS, isoWeekday } from "@/domain/route";
 import { useSession } from "@/lib/session";
-import { filterCustomers, listCustomers, listOrders, listRoutes } from "@/lib/store";
+import { filterCustomers, listCustomers, listOrders, listRoutes, noSaleToday } from "@/lib/store";
 import { useSync } from "@/lib/SyncProvider";
 import { colors, ui } from "@/lib/theme";
 import type { Customer } from "@/lib/types";
@@ -21,6 +21,7 @@ export default function Today() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [routes, setRoutes] = useState<{ id: string; name: string; visit_days: number[] }[]>([]);
   const [ordered, setOrdered] = useState<Set<string>>(new Set());
+  const [noSale, setNoSale] = useState<Map<string, string>>(new Map());
   const [mode, setMode] = useState<"route" | "all">("route");
   const [query, setQuery] = useState("");
 
@@ -35,6 +36,7 @@ export default function Today() {
       const today = new Date().toDateString();
       const orders = await listOrders(db);
       setOrdered(new Set(orders.filter((o) => new Date(o.created_at).toDateString() === today).map((o) => o.customer_id)));
+      setNoSale(await noSaleToday(db));
     })();
   }, [db, session, version, router]);
 
@@ -86,7 +88,11 @@ export default function Today() {
               </Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
-              {ordered.has(item.id) ? <Text style={styles.done}>Pedido hoy</Text> : null}
+              {ordered.has(item.id) ? (
+                <Text style={styles.done}>Pedido hoy</Text>
+              ) : noSale.has(item.id) ? (
+                <Text style={styles.noSale}>No compró</Text>
+              ) : null}
               {Number(item.balance) > 0 && <Text style={ui.muted}>Debe {formatMoney(item.balance)}</Text>}
             </View>
           </Pressable>
@@ -115,4 +121,5 @@ const styles = StyleSheet.create({
   item: { flexDirection: "row", alignItems: "center", gap: 12 },
   order: { width: 28, textAlign: "center", fontWeight: "700", color: colors.primary, fontSize: 16 },
   done: { color: colors.primary, fontWeight: "700", fontSize: 13 },
+  noSale: { color: colors.warning, fontWeight: "700", fontSize: 13 },
 });

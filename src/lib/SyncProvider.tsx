@@ -5,7 +5,7 @@ import { AppState } from "react-native";
 import { isRevoked, OfflineError } from "./api.ts";
 import { useSession } from "./session.tsx";
 import { countPending, getMeta } from "./store.ts";
-import { syncAll, uploadOrders } from "./sync.ts";
+import { syncAll, uploadAll } from "./sync.ts";
 
 interface SyncState {
   syncing: boolean;
@@ -48,7 +48,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setSyncing(true);
       setError(null);
       try {
-        const { sent, failed } = full ? await syncAll(db, session) : await uploadOrders(db, session);
+        const { sent, failed } = full ? await syncAll(db, session) : await uploadAll(db, session);
         const parts = [];
         if (sent) parts.push(`${sent} pedido${sent > 1 ? "s" : ""} enviado${sent > 1 ? "s" : ""}`);
         if (failed) parts.push(`${failed} con problemas`);

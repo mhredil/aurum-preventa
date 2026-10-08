@@ -35,6 +35,12 @@
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Aurum Preventa registra dónde se tomó cada pedido o visita para el control de la ruta."
+        }
       ]
     ],
     "scheme": "aurumpreventa",

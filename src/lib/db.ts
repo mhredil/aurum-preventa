@@ -47,5 +47,17 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     `);
     version = 2;
   }
+  if (version < 3) {
+    // Visits without sale ("no compró") waiting to be sent.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS visits (
+        id TEXT PRIMARY KEY NOT NULL, customer_id TEXT NOT NULL, customer_name TEXT,
+        visited_at TEXT NOT NULL, reason TEXT NOT NULL, notes TEXT, location TEXT,
+        state TEXT NOT NULL, error TEXT
+      );
+      CREATE INDEX IF NOT EXISTS ix_visits_state ON visits (state);
+    `);
+    version = 3;
+  }
   await db.execAsync(`PRAGMA user_version = ${version}`);
 }

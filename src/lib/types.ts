@@ -2,6 +2,12 @@
 
 export interface Snapshot {
   server_time: string;
+  /** false: only what changed since the last sync (plus complete ids, balances and stock). */
+  full: boolean;
+  customer_ids: string[];
+  balances: Record<string, string>;
+  product_ids: string[];
+  stock: Record<string, string>;
   seller: { id: string; code: string; name: string };
   branch: { id: string; name: string };
   warehouse: { id: string; name: string } | null;
@@ -104,11 +110,31 @@ export interface OutboxOrder {
   sent_payload: OrderPayload | null;
 }
 
+export interface Location {
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+}
+
+/** "No compró": a visit without order, with its reason. */
+export interface VisitRecord {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  visited_at: string;
+  reason: string;
+  notes: string | null;
+  location: Location | null;
+  state: "PENDING" | "SENT" | "ERROR";
+  error: string | null;
+}
+
 export interface OrderPayload {
   id: string;
   customer_id: string;
   taken_at: string;
   notes: string | null;
+  location?: Location | null;
   lines: {
     product_id: string;
     code: string;

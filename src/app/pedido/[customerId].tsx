@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { formatMoney, formatQuantity, lineAmounts, orderTotals, parseAmount } from "@/domain/money";
+import { currentLocation } from "@/lib/location";
 import { takeScan } from "@/lib/scan";
 import { addOrder, canEdit, getCustomer, getOrder, productByBarcode, productsByIds, searchProducts, updateOrder } from "@/lib/store";
 import { useSync } from "@/lib/SyncProvider";
 import { colors, ui } from "@/lib/theme";
-import type { Customer, OrderPayload, OutboxOrder, Product } from "@/lib/types";
+import type { Customer, Location, OrderPayload, OutboxOrder, Product } from "@/lib/types";
 
 interface Line {
   product: Product;
@@ -43,6 +44,12 @@ export default function NewOrder() {
   const [saving, setSaving] = useState(false);
   const [original, setOriginal] = useState<OutboxOrder | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
+  const [location, setLocation] = useState<Location | null>(null);
+
+  // Where the order is taken, asked when the screen opens so saving never waits for the GPS.
+  useEffect(() => {
+    void currentLocation().then(setLocation);
+  }, []);
 
   useEffect(() => {
     void getCustomer(db, customerId).then(setCustomer);
@@ -112,6 +119,7 @@ export default function NewOrder() {
         customer_id: customer.id,
         taken_at: original?.payload.taken_at ?? new Date().toISOString(),
         notes: notes.trim() || null,
+        location: original?.payload.location ?? location,
         lines: lines.map((l) => ({
           product_id: l.product.id,
           code: l.product.code,
