@@ -140,13 +140,55 @@ export async function productByBarcode(db: SQLiteDatabase, priceListId: string |
 
 // ---------- Pedidos (cola de envío) ----------
 
-type OutboxRow = Omit<OutboxOrder, "payload" | "price_review"> & { payload: string; price_review: number };
+type OutboxRow = Omit<OutboxOrder, "payload" | "price_review" | "edited" | "editable" | "sent_payload"> & {
+  payload: string;
+  price_review: number;
+  edited: number;
+  editable: number;
+  sent_payload: string | null;
+};
 
 const toOutbox = (row: OutboxRow): OutboxOrder => ({
   ...row,
   payload: JSON.parse(row.payload) as OrderPayload,
   price_review: Boolean(row.price_review),
+  edited: Boolean(row.edited),
+  editable: Boolean(row.editable),
+  sent_payload: row.sent_payload ? (JSON.parse(row.sent_payload) as OrderPayload) : null,
 });
+
+const isToday = (iso: string): boolean => new Date(iso).toDateString() === new Date().toDateString();
+
+/** The seller may change an order the day it was taken while the office has not invoiced
+ * it nor put it on a delivery run (the server re-checks when it arrives). */
+export const canEdit = (order: OutboxOrder): boolean =>
+  isToday(order.created_at) && (order.sent_payload === null || order.editable);
+
+export async function getOrder(db: SQLiteDatabase, id: string): Promise<OutboxOrder | null> {
+  const row = await db.getFirstAsync<OutboxRow>("SELECT * FROM outbox WHERE id = ?", id);
+  return row ? toOutbox(row) : null;
+}
+
+/** Saves a change: an order never sent stays a new one; a sent one becomes a modification. */
+export async function updateOrder(db: SQLiteDatabase, payload: OrderPayload, total: number): Promise<void> {
+  await db.runAsync(
+    `UPDATE outbox SET payload = ?, total = ?, state = 'PENDING', error = NULL,
+       edited = CASE WHEN sent_payload IS NULL THEN 0 ELSE 1 END
+     WHERE id = ?`,
+    [JSON.stringify(payload), total, payload.id],
+  );
+}
+
+/** Back to the order as the server has it (a change it refused, or one no longer wanted). */
+export async function discardChanges(db: SQLiteDatabase, id: string): Promise<void> {
+  const order = await getOrder(db, id);
+  if (!order?.sent_payload) return;
+  const total = order.sent_payload.lines.reduce((sum, line) => sum + line.total, 0);
+  await db.runAsync(
+    "UPDATE outbox SET payload = sent_payload, total = ?, state = 'SENT', edited = 0, error = NULL WHERE id = ?",
+    [Math.round(total * 100) / 100, id],
+  );
+}
 
 export async function addOrder(db: SQLiteDatabase, payload: OrderPayload, customerName: string, total: number): Promise<void> {
   await db.runAsync(
@@ -176,9 +218,18 @@ export async function countPending(db: SQLiteDatabase): Promise<number> {
 export async function applyResult(db: SQLiteDatabase, result: UploadResult): Promise<void> {
   if (result.ok) {
     await db.runAsync(
-      `UPDATE outbox SET state = 'SENT', number = ?, server_status = ?, price_review = ?, error = NULL,
-       sent_at = ? WHERE id = ?`,
-      [result.number, result.status, result.price_review ? 1 : 0, new Date().toISOString(), result.id],
+      `UPDATE outbox SET state = 'SENT', number = ?, server_status = ?, price_review = ?, editable = ?,
+       error = NULL, edited = 0, sent_payload = payload, total = COALESCE(?, total), sent_at = ?
+       WHERE id = ?`,
+      [
+        result.number,
+        result.status,
+        result.price_review ? 1 : 0,
+        result.editable ? 1 : 0,
+        result.total_amount === null ? null : Number(result.total_amount),
+        new Date().toISOString(),
+        result.id,
+      ],
     );
   } else {
     await db.runAsync("UPDATE outbox SET state = 'ERROR', error = ? WHERE id = ?", [result.error, result.id]);
@@ -186,10 +237,14 @@ export async function applyResult(db: SQLiteDatabase, result: UploadResult): Pro
 }
 
 async function applyState(db: SQLiteDatabase, state: OrderState): Promise<void> {
+  // A change still waiting to be sent is not overwritten by the office's state.
   await db.runAsync(
-    `UPDATE outbox SET state = 'SENT', number = ?, server_status = ?, price_review = ?, error = NULL
+    `UPDATE outbox SET number = ?, server_status = ?, price_review = ?, editable = ?,
+       state = CASE WHEN edited = 1 THEN state ELSE 'SENT' END,
+       error = CASE WHEN edited = 1 THEN error ELSE NULL END,
+       sent_payload = COALESCE(sent_payload, payload)
      WHERE id = ?`,
-    [state.number, state.status, state.price_review ? 1 : 0, state.id],
+    [state.number, state.status, state.price_review ? 1 : 0, state.editable ? 1 : 0, state.id],
   );
 }
 
@@ -198,7 +253,19 @@ export async function retryOrder(db: SQLiteDatabase, id: string): Promise<void> 
   await db.runAsync("UPDATE outbox SET state = 'PENDING', error = NULL WHERE id = ? AND state = 'ERROR'", id);
 }
 
-/** Only orders not sent yet can be discarded. */
+/** Only orders the server never received can be discarded. */
 export async function deleteOrder(db: SQLiteDatabase, id: string): Promise<void> {
-  await db.runAsync("DELETE FROM outbox WHERE id = ? AND state != 'SENT'", id);
+  await db.runAsync("DELETE FROM outbox WHERE id = ? AND sent_payload IS NULL", id);
+}
+
+/** Articles of an order, priced for the customer's list (to modify it). */
+export async function productsByIds(db: SQLiteDatabase, priceListId: string | null, ids: string[]): Promise<Product[]> {
+  if (!ids.length) return [];
+  const rows = await db.getAllAsync<ProductRow>(
+    `SELECT p.*, pr.price AS price FROM products p
+     JOIN prices pr ON pr.product_id = p.id AND pr.price_list_id = ?
+     WHERE p.id IN (${ids.map(() => "?").join(", ")})`,
+    [priceListId ?? "", ...ids],
+  );
+  return rows.map(toProduct);
 }

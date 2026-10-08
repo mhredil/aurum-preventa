@@ -38,5 +38,14 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     `);
     version = 1;
   }
+  if (version < 2) {
+    // Orders can be modified the same day: track changes to sent orders.
+    await db.execAsync(`
+      ALTER TABLE outbox ADD COLUMN edited INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE outbox ADD COLUMN editable INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE outbox ADD COLUMN sent_payload TEXT;
+    `);
+    version = 2;
+  }
   await db.execAsync(`PRAGMA user_version = ${version}`);
 }

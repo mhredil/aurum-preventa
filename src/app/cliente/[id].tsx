@@ -50,7 +50,7 @@ export default function CustomerScreen() {
       <Button title="Nuevo pedido" onPress={() => router.push({ pathname: "/pedido/[customerId]", params: { customerId: customer.id } })} />
       {orders.length > 0 && <Text style={[ui.label, { marginTop: 8 }]}>Pedidos tomados en este teléfono</Text>}
       {orders.map((order) => (
-        <OrderCard key={order.id} order={order} />
+        <OrderCard key={order.id} order={order} onPress={() => router.push({ pathname: "/orden/[id]", params: { id: order.id } })} />
       ))}
       <Text style={ui.muted}>El saldo es el del momento de la última sincronización.</Text>
     </ScrollView>

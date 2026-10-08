@@ -6,10 +6,10 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "r
 import { Button } from "@/components/Button";
 import { formatMoney, formatQuantity, lineAmounts, orderTotals, parseAmount } from "@/domain/money";
 import { takeScan } from "@/lib/scan";
-import { addOrder, getCustomer, productByBarcode, searchProducts } from "@/lib/store";
+import { addOrder, canEdit, getCustomer, getOrder, productByBarcode, productsByIds, searchProducts, updateOrder } from "@/lib/store";
 import { useSync } from "@/lib/SyncProvider";
 import { colors, ui } from "@/lib/theme";
-import type { Customer, OrderPayload, Product } from "@/lib/types";
+import type { Customer, OrderPayload, OutboxOrder, Product } from "@/lib/types";
 
 interface Line {
   product: Product;
@@ -28,9 +28,9 @@ const amounts = (line: Line) =>
 
 /** Order entry: search (or scan) articles, quantities in cases and units, optional bonus.
  * Prices are the customer's list as synced; the order is saved on the phone and sent when
- * there is signal. */
+ * there is signal. With `orderId` it modifies an order of the day. */
 export default function NewOrder() {
-  const { customerId } = useLocalSearchParams<{ customerId: string }>();
+  const { customerId, orderId } = useLocalSearchParams<{ customerId: string; orderId?: string }>();
   const db = useSQLiteContext();
   const router = useRouter();
   const { refresh, sync } = useSync();
@@ -41,10 +41,32 @@ export default function NewOrder() {
   const [editing, setEditing] = useState<Line | null>(null);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [original, setOriginal] = useState<OutboxOrder | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
 
   useEffect(() => {
     void getCustomer(db, customerId).then(setCustomer);
   }, [db, customerId]);
+
+  // Modifying: the order's lines with the articles as they are on the phone now.
+  useEffect(() => {
+    if (!orderId || !customer) return;
+    void (async () => {
+      const order = await getOrder(db, orderId);
+      if (!order) return;
+      setOriginal(order);
+      setNotes(order.payload.notes ?? "");
+      const products = await productsByIds(db, customer.price_list_id, order.payload.lines.map((l) => l.product_id));
+      const byId = new Map(products.map((p) => [p.id, p]));
+      setLines(
+        order.payload.lines.flatMap((l) => {
+          const product = byId.get(l.product_id);
+          return product ? [{ product, cases: l.cases === "0" ? "" : l.cases, units: l.units === "0" ? "" : l.units, bonus: l.bonus_percent === "0" ? "" : l.bonus_percent }] : [];
+        }),
+      );
+      setMissing(order.payload.lines.filter((l) => !byId.has(l.product_id)).map((l) => `${l.code} ${l.description}`));
+    })();
+  }, [db, orderId, customer]);
 
   useEffect(() => {
     if (!customer) return;
@@ -86,9 +108,9 @@ export default function NewOrder() {
     setSaving(true);
     try {
       const payload: OrderPayload = {
-        id: randomUUID(),
+        id: original?.id ?? randomUUID(),
         customer_id: customer.id,
-        taken_at: new Date().toISOString(),
+        taken_at: original?.payload.taken_at ?? new Date().toISOString(),
         notes: notes.trim() || null,
         lines: lines.map((l) => ({
           product_id: l.product.id,
@@ -101,7 +123,15 @@ export default function NewOrder() {
           total: amounts(l).total,
         })),
       };
-      await addOrder(db, payload, customer.trade_name || customer.legal_name, totals.total);
+      if (original) {
+        if (!canEdit(original)) {
+          Alert.alert("No se puede modificar", "Este pedido ya no se puede modificar.");
+          return;
+        }
+        await updateOrder(db, payload, totals.total);
+      } else {
+        await addOrder(db, payload, customer.trade_name || customer.legal_name, totals.total);
+      }
       await refresh();
       void sync(); // sent now if there is signal; otherwise it waits in the queue
       router.back();
@@ -113,7 +143,12 @@ export default function NewOrder() {
   if (!customer) return <View style={ui.screen} />;
   return (
     <View style={ui.screen}>
-      <Stack.Screen options={{ title: customer.trade_name || customer.legal_name }} />
+      <Stack.Screen options={{ title: `${original ? "Modificar" : "Pedido"}: ${customer.trade_name || customer.legal_name}` }} />
+      {missing.length > 0 && (
+        <Text style={styles.missing}>
+          Ya no están en la lista de este cliente y se quitan del pedido: {missing.join(", ")}
+        </Text>
+      )}
       <View style={styles.search}>
         <TextInput
           style={[ui.input, { flex: 1 }]}
@@ -180,7 +215,7 @@ export default function NewOrder() {
           <Text style={ui.muted}>Neto {formatMoney(totals.net)} + impuestos {formatMoney(totals.vat)}</Text>
           <Text style={styles.total}>{formatMoney(totals.total)}</Text>
         </View>
-        <Button title="Guardar pedido" onPress={() => void save()} disabled={!lines.length} loading={saving} />
+        <Button title={original ? "Guardar cambios" : "Guardar pedido"} onPress={() => void save()} disabled={!lines.length} loading={saving} />
       </View>
       {editing && <LineEditor line={editing} onSave={keep} onClose={() => setEditing(null)} />}
     </View>
@@ -240,4 +275,5 @@ const styles = StyleSheet.create({
   overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
   sheet: { backgroundColor: colors.surface, padding: 20, gap: 12, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
   fields: { flexDirection: "row", gap: 10 },
+  missing: { margin: 12, marginBottom: 0, padding: 10, borderRadius: 8, backgroundColor: colors.warningSoft, color: colors.warning },
 });

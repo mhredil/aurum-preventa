@@ -18,10 +18,12 @@ export async function uploadOrders(db: SQLiteDatabase, session: Session): Promis
       method: "POST",
       token: session.token,
       body: {
-        orders: batch.map(({ payload }) => ({
+        orders: batch.map(({ payload, edited }) => ({
           id: payload.id,
           customer_id: payload.customer_id,
           taken_at: payload.taken_at,
+          // A change to an order the server already has.
+          modified_at: edited ? new Date().toISOString() : null,
           notes: payload.notes,
           lines: payload.lines.map((l) => ({
             product_id: l.product_id,

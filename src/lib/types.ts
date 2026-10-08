@@ -55,6 +55,8 @@ export interface OrderState {
   number: string;
   status: string;
   price_review: boolean;
+  /** Same day, open, not invoiced nor on a delivery run: the seller can still change it. */
+  editable: boolean;
   total_amount: string;
 }
 
@@ -65,6 +67,7 @@ export interface UploadResult {
   number: string | null;
   status: string | null;
   price_review: boolean;
+  editable: boolean;
   total_amount: string | null;
   error: string | null;
 }
@@ -93,6 +96,12 @@ export interface OutboxOrder {
   price_review: boolean;
   error: string | null;
   sent_at: string | null;
+  /** Changed after it was sent: the change goes out as a modification. */
+  edited: boolean;
+  /** What the server says (only meaningful once sent). */
+  editable: boolean;
+  /** The order as the server has it, to undo a change it refused. */
+  sent_payload: OrderPayload | null;
 }
 
 export interface OrderPayload {

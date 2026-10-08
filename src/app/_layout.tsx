@@ -27,6 +27,7 @@ export default function RootLayout() {
             <Stack.Screen name="cliente/[id]" options={{ title: "Cliente" }} />
             <Stack.Screen name="pedido/[customerId]" options={{ title: "Nuevo pedido" }} />
             <Stack.Screen name="pedidos" options={{ title: "Pedidos" }} />
+            <Stack.Screen name="orden/[id]" options={{ title: "Pedido" }} />
           </Stack>
         </SyncProvider>
       </SessionProvider>
