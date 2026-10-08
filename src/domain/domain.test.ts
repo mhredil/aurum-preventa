@@ -30,6 +30,9 @@ test("pairing QR and manual server", () => {
   assert.equal(parsePairingQr("https://otra-cosa.com"), null);
   assert.equal(normalizeServer("dist.com.ar/"), "https://dist.com.ar/api/v1");
   assert.equal(normalizeServer("http://192.168.0.10:8080"), "http://192.168.0.10:8080/api/v1");
+  assert.equal(normalizeServer("192.168.0.10:8080"), "http://192.168.0.10:8080/api/v1");
+  assert.equal(normalizeServer("10.0.2.2:8080"), "http://10.0.2.2:8080/api/v1");
+  assert.equal(normalizeServer("localhost:8080"), "http://localhost:8080/api/v1");
   assert.equal(normalizeCode(" ab12c-de34f "), "AB12CDE34F");
 });
 

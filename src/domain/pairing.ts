@@ -20,7 +20,11 @@ export function parsePairingQr(text: string): PairingData | null {
 export function normalizeServer(text: string): string | null {
   let value = text.trim();
   if (!value) return null;
-  if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
+  if (!/^https?:\/\//i.test(value)) {
+    // A development server on the local network (IP or localhost) has no certificate.
+    const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(value);
+    value = `${local ? "http" : "https"}://${value}`;
+  }
   value = value.replace(/\/+$/, "");
   if (!/\/api\/v1$/.test(value)) value = `${value}/api/v1`;
   try {
