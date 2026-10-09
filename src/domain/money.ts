@@ -6,6 +6,8 @@ export interface PricedProduct {
   vat_treatment: string; // GRAVADO | EXENTO | NO_GRAVADO
   vat_rate: string;
   internal_tax_rate: string;
+  /** Fixed amount per base unit, besides (or instead of) the rate. */
+  internal_tax_amount?: string | null;
 }
 
 export interface LineInput {
@@ -43,7 +45,9 @@ export function lineAmounts(product: PricedProduct, line: LineInput): LineAmount
   const qty = quantity(product, line.cases, line.units);
   const net = round2(qty * line.unitPrice * (1 - line.bonusPercent / 100));
   const vat = product.vat_treatment === "GRAVADO" ? round2((net * Number(product.vat_rate)) / 100) : 0;
-  const internalTax = round2((net * Number(product.internal_tax_rate)) / 100);
+  const internalTax = round2(
+    (net * Number(product.internal_tax_rate)) / 100 + qty * Number(product.internal_tax_amount ?? 0),
+  );
   return { quantity: qty, net, vat, internalTax, total: round2(net + vat + internalTax) };
 }
 

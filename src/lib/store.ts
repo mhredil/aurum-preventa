@@ -36,8 +36,8 @@ export async function saveSnapshot(db: SQLiteDatabase, snap: Snapshot): Promise<
     }
     const product = await tx.prepareAsync(
       `INSERT OR REPLACE INTO products (id, code, description, short_description, units_per_case, barcodes, category,
-        brand, vat_treatment, vat_rate, internal_tax_rate, available, search)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        brand, vat_treatment, vat_rate, internal_tax_rate, internal_tax_amount, available, search)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const dropPrices = await tx.prepareAsync("DELETE FROM prices WHERE product_id = ?");
     const price = await tx.prepareAsync("INSERT INTO prices (product_id, price_list_id, price) VALUES (?, ?, ?)");
@@ -46,7 +46,7 @@ export async function saveSnapshot(db: SQLiteDatabase, snap: Snapshot): Promise<
         const search = plain([p.code, p.description, p.short_description, p.brand, p.category, ...p.barcodes].join(" "));
         await product.executeAsync([
           p.id, p.code, p.description, p.short_description, p.units_per_case, JSON.stringify(p.barcodes),
-          p.category, p.brand, p.vat_treatment, p.vat_rate, p.internal_tax_rate, p.available, search,
+          p.category, p.brand, p.vat_treatment, p.vat_rate, p.internal_tax_rate, p.internal_tax_amount ?? "0", p.available, search,
         ]);
         await dropPrices.executeAsync([p.id]);
         for (const [listId, value] of Object.entries(p.prices)) {

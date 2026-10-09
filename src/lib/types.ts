@@ -50,6 +50,8 @@ export interface SnapshotProduct {
   vat_treatment: string;
   vat_rate: string;
   internal_tax_rate: string;
+  /** Fixed impuestos internos per unit (servers before this field: absent). */
+  internal_tax_amount?: string;
   available: string;
   prices: Record<string, string | null>;
 }

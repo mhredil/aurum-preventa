@@ -59,5 +59,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     `);
     version = 3;
   }
+  if (version < 4) {
+    // Impuestos internos as a fixed amount per unit (besides the rate).
+    await db.execAsync(`ALTER TABLE products ADD COLUMN internal_tax_amount TEXT NOT NULL DEFAULT '0';`);
+    version = 4;
+  }
   await db.execAsync(`PRAGMA user_version = ${version}`);
 }

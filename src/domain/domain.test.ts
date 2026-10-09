@@ -53,3 +53,10 @@ test("search ignores accents, case and word order", () => {
   assert.ok(matches("CAFÉ LA VIRGINIA 500 G", "virginia cafe"));
   assert.ok(!matches("YERBA MATE", "cafe"));
 });
+
+test("fixed impuestos internos per unit", () => {
+  const fixed = { ...product, internal_tax_amount: "25" };
+  const amounts = lineAmounts(fixed, { cases: 0, units: 10, unitPrice: 100, bonusPercent: 0 });
+  assert.equal(amounts.internalTax, 250);
+  assert.equal(amounts.total, 1460);
+});
