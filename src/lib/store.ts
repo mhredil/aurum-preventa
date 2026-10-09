@@ -206,6 +206,10 @@ const isToday = (iso: string): boolean => new Date(iso).toDateString() === new D
 export const canEdit = (order: OutboxOrder): boolean =>
   isToday(order.created_at) && (order.sent_payload === null || order.editable);
 
+/** Still in the seller's hands: not sent yet, refused, or sent but still modifiable
+ * (today's, not invoiced nor on a delivery run). The rest are processed by the office. */
+export const isOpen = (order: OutboxOrder): boolean => order.state !== "SENT" || canEdit(order);
+
 export async function getOrder(db: SQLiteDatabase, id: string): Promise<OutboxOrder | null> {
   const row = await db.getFirstAsync<OutboxRow>("SELECT * FROM outbox WHERE id = ?", id);
   return row ? toOutbox(row) : null;
