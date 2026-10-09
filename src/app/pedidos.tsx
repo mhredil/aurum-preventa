@@ -30,7 +30,7 @@ export default function Orders() {
     <View style={ui.screen}>
       <SyncBar />
       <View style={styles.tabs}>
-        <Tab label={`Para modificar (${open.length})`} active={tab === "open"} onPress={() => setTab("open")} />
+        <Tab label={`Pendientes (${open.length})`} active={tab === "open"} onPress={() => setTab("open")} />
         <Tab label={`Procesados (${done.length})`} active={tab === "done"} onPress={() => setTab("done")} />
       </View>
       <FlatList
